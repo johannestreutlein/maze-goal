@@ -1,5 +1,4 @@
 import tensorflow as tf
-import tensorflow_datasets as tfds
 import jax
 import flax
 from flax import linen as nn
@@ -9,12 +8,11 @@ from einops import einsum, rearrange
 import optax
 import matplotlib.pyplot as plt
 import pickle
-from google.colab import drive
 
 import numpy as np
+from flax.training import orbax_utils
 
 import orbax.checkpoint
-from flax.training import orbax_utils
 
 
 import os
@@ -30,36 +28,35 @@ from dataset import NumpyLoader
 from model import TransformerLM, TransformerConfig
 
 
-
-
-# config details
-checkpoint_path = None
-save = True
-
-np_seed = 0
-jnp_seed = 0
-
-batch_size = 128
-lr = 1e-4
-n_train_steps = 10000000
-
-save_every_n_steps = 100
-
-n_worker = 2
-
-#n_eval = 1024
-emb_dim: int = 256
-num_heads: int = 16
-num_layers: int = 12
-qkv_dim: int = 256#512
-mlp_dim: int = 1024#2048
-max_len = 256
-
-grid_n = 5
-
-
-
 def main():
+    # config details
+    checkpoint_path = None
+    base_path = "data"
+    save = True
+
+    np_seed = 0
+    jnp_seed = 0
+
+    batch_size = 128
+    lr = 1e-4
+    n_train_steps = 10000000
+
+    save_every_n_steps = 1000
+    keep_n_checkpoints = 100
+
+    n_worker = 8
+
+    # n_eval = 1024
+    emb_dim: int = 256
+    num_heads: int = 16
+    num_layers: int = 12
+    qkv_dim: int = 256  # 512
+    mlp_dim: int = 1024  # 2048
+    max_len = 256
+
+    grid_n = 5
+
+
     @jax.jit
     def train_step(state, batch):
         params = state['params']
@@ -87,8 +84,8 @@ def main():
     rng, key = random.split(key)
 
     config = TransformerConfig(
-        vocab_size=vocab_size,
-        output_vocab_size=vocab_size,
+        vocab_size=dataset.vocab_size,
+        output_vocab_size=dataset.vocab_size,
         max_len=max_len,
         emb_dim=emb_dim,
         num_heads=num_heads,
@@ -150,7 +147,7 @@ def main():
 
     if checkpoint_path:
         orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-        options = orbax.checkpoint.CheckpointManagerOptions(max_to_keep=100)
+        options = orbax.checkpoint.CheckpointManagerOptions(max_to_keep=keep_n_checkpoints)
         checkpoint_manager = orbax.checkpoint.CheckpointManager(checkpoint_path, orbax_checkpointer, options)
 
         dummy_dict = {
@@ -185,10 +182,6 @@ def main():
             save_args = orbax_utils.save_args_from_target(save_dict)
             checkpoint_manager.save(save_step, save_dict, save_kwargs={'save_args': save_args})
 
-            plt.plot(losses)
-            plt.yscale('log')
-            plt.show()
-
 
         if n >= n_train_steps:
             break
@@ -208,7 +201,7 @@ def main():
 
         old_time = loop_time
         loop_time = time.time()
-        print('steps per second: {:.5f}'.format(save_every_n_steps / (loop_time - old_time)))
+        print('steps per second: {:.5f}'.format(1/(loop_time - old_time)))
         print(f'step: {state["step"]}')
         print('loss: {}'.format(state['loss']))
 
