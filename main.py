@@ -44,7 +44,7 @@ def main():
     save_every_n_steps = 1000
     keep_n_checkpoints = 100
 
-    n_worker = 8
+    n_worker = 4
 
     # n_eval = 1024
     emb_dim: int = 256
