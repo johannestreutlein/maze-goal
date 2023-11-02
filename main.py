@@ -30,7 +30,7 @@ from model import TransformerLM, TransformerConfig
 
 def main():
     # config details
-    checkpoint_path = None
+    checkpoint_path = "data/2023-10-31_16-24-46"
     base_path = "data"
     save = True
 
@@ -160,6 +160,8 @@ def main():
             print(f'loading step {step}')
             load_dict = checkpoint_manager.restore(step, items=dummy_dict)
             state = load_dict['state']
+            loss = load_dict['loss']
+            loss = list(loss)
 
 
     # training loop
@@ -170,6 +172,7 @@ def main():
     loop_time = time.time()
     # start_time = time.time()
     # end_time = time.time()
+
 
     for n, batch in enumerate(train_loader):
 
