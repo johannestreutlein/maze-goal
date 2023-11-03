@@ -151,7 +151,8 @@ def main():
         checkpoint_manager = orbax.checkpoint.CheckpointManager(checkpoint_path, orbax_checkpointer, options)
 
         dummy_dict = {
-            'state': state}
+            'state': state,
+            'loss': jnp.zeros(1)}
 
 
         step = checkpoint_manager.latest_step()
@@ -161,7 +162,7 @@ def main():
             load_dict = checkpoint_manager.restore(step, items=dummy_dict)
             state = load_dict['state']
             loss = load_dict['loss']
-            loss = list(loss)
+            losses = list(loss)
 
 
     # training loop
