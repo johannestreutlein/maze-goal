@@ -15,6 +15,7 @@ from maze_dataset.generation import LatticeMazeGenerators
 from maze_dataset.tokenization import MazeTokenizer, TokenizationMode
 
 
+
 def find_from_right(lst, item):
   try:
       index = lst[::-1].index(item)  # Reverse the list and find the item
