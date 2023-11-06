@@ -152,7 +152,7 @@ def main():
 
         dummy_dict = {
             'state': state,
-            'loss': jnp.zeros(1)}
+            'loss': np.zeros(0.)}
 
 
         step = checkpoint_manager.latest_step()
@@ -181,7 +181,7 @@ def main():
             save_step = state['step']
             print(f'saving at step {save_step}')
             save_dict = {'state': state,
-                         'loss': jnp.array(losses)
+                         'loss': np.array(losses)
                          }
             save_args = orbax_utils.save_args_from_target(save_dict)
             checkpoint_manager.save(save_step, save_dict, save_kwargs={'save_args': save_args})
