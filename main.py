@@ -152,7 +152,7 @@ def main():
 
         dummy_dict = {
             'state': state,
-            'loss': np.zeros(0.)}
+            'loss': np.zeros(1)}
 
 
         step = checkpoint_manager.latest_step()

@@ -255,6 +255,7 @@ class Decoder(nn.Module):
       inputs_segmentation=None,
       decoder_mask=None,
       encoder_decoder_mask=None,
+      intervention=lambda x, layer:x,
   ):
     """Applies Transformer model on the inputs.
 
@@ -304,6 +305,7 @@ class Decoder(nn.Module):
       y = EncoderDecoder1DBlock(
           config=config, name=f'encoderdecoderblock_{lyr}'
       )(y, decoder_mask=decoder_mask, encoder_decoder_mask=encoder_decoder_mask)
+      y = intervention(y, lyr)
       stream.append(y)
     y = nn.LayerNorm(dtype=config.dtype, name='encoderdecoder_norm')(y)
 
@@ -335,7 +337,7 @@ class TransformerLM(nn.Module):
   config: TransformerConfig
 
   @nn.compact
-  def __call__(self, inputs, inputs_positions=None, inputs_segmentation=None):
+  def __call__(self, inputs, inputs_positions=None, inputs_segmentation=None, intervention=lambda x,layer:x):
     """Applies TransformerLM on the inputs.
 
     Args:
@@ -377,5 +379,6 @@ class TransformerLM(nn.Module):
         inputs_segmentation=inputs_segmentation,
         decoder_mask=decoder_mask,
         encoder_decoder_mask=None,
+        intervention = intervention
     )
     return logits.astype(self.config.dtype), act
