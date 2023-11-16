@@ -101,7 +101,7 @@ def main():
         preds = preds[:, 0:-1]
         targets = batch['data'][:, 1:]
         idx = jnp.arange(targets.shape[1])[None, :]
-        mask = jnp.where((idx <= batch['end_index'][:, None]) & (idx >= batch['start_index'][:, None]), 1., 0.)
+        mask = jnp.where((idx < batch['end_index'][:, None]) & (idx >= batch['start_index'][:, None]), 1., 0.)
 
         loss = optax.softmax_cross_entropy_with_integer_labels(
             logits=preds,
@@ -114,8 +114,8 @@ def main():
 
     tx = optax.adamw(lr)
 
-    x = next(iter(train_loader))
-    params = model.init(rng, x['data'])
+    batch = next(iter(train_loader))
+    params = model.init(rng, batch['data'])
 
     apply_fn = jax.jit(model.apply)
 
@@ -152,7 +152,7 @@ def main():
 
         dummy_dict = {
             'state': state,
-            'loss': np.zeros(1)}
+            'loss': np.array([0.])}
 
 
         step = checkpoint_manager.latest_step()
@@ -161,8 +161,7 @@ def main():
             print(f'loading step {step}')
             load_dict = checkpoint_manager.restore(step, items=dummy_dict)
             state = load_dict['state']
-            loss = load_dict['loss']
-            losses = list(loss)
+            losses = list(load_dict['loss'])
 
 
     # training loop
