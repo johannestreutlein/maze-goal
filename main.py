@@ -176,18 +176,7 @@ def main():
 
     for n, batch in enumerate(train_loader):
 
-        if save and n % save_every_n_steps == 0:
-            save_step = state['step']
-            print(f'saving at step {save_step}')
-            save_dict = {'state': state,
-                         'loss': np.array(losses)
-                         }
-            save_args = orbax_utils.save_args_from_target(save_dict)
-            checkpoint_manager.save(save_step, save_dict, save_kwargs={'save_args': save_args})
 
-
-        if n >= n_train_steps:
-            break
         # print('non train step stuff: {:.5f}'.format(loop_time-old_time-end_time+start_time))
         # del batch['maze']
 
@@ -211,6 +200,19 @@ def main():
         # eval_loss = eval_step(state, eval_batch)
         # print(f'eval_loss: {eval_loss}')
         # eval_losses.append(eval_loss)
+
+        if save and n % save_every_n_steps == 0:
+            save_step = state['step']
+            print(f'saving at step {save_step}')
+            save_dict = {'state': state,
+                         'loss': np.array(losses)
+                         }
+            save_args = orbax_utils.save_args_from_target(save_dict)
+            checkpoint_manager.save(save_step, save_dict, save_kwargs={'save_args': save_args})
+
+
+        if n >= n_train_steps:
+            break
 
 
 if __name__ == '__main__':

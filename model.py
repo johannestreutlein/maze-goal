@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+#### code taken from https://github.com/google/flax/tree/main/examples/lm1b and modified by me
+
 """Transformer-based language model.
 
 Reusing decoder only model from examples/wmt.
@@ -298,6 +300,7 @@ class Decoder(nn.Module):
     y = y.astype(config.dtype)
 
     stream = []
+    y = intervention(y, 0)
     stream.append(y)
 
     # Target-Input Decoder
@@ -305,10 +308,9 @@ class Decoder(nn.Module):
       y = EncoderDecoder1DBlock(
           config=config, name=f'encoderdecoderblock_{lyr}'
       )(y, decoder_mask=decoder_mask, encoder_decoder_mask=encoder_decoder_mask)
-      y = intervention(y, lyr)
+      y = intervention(y, lyr+1)
       stream.append(y)
     y = nn.LayerNorm(dtype=config.dtype, name='encoderdecoder_norm')(y)
-
 
     # Decoded Logits
     if config.logits_via_embedding:
@@ -379,6 +381,6 @@ class TransformerLM(nn.Module):
         inputs_segmentation=inputs_segmentation,
         decoder_mask=decoder_mask,
         encoder_decoder_mask=None,
-        intervention = intervention
+        intervention=intervention
     )
     return logits.astype(self.config.dtype), act

@@ -25,7 +25,7 @@ def find_from_right(lst, item):
 
 
 class CustomMazeDataset(Dataset):
-    def __init__(self, grid_n=5, include_maze=False):
+    def __init__(self, grid_n=5, include_maze=False, no_loops=False):
         # Initialization code goes here
         self.include_maze = include_maze
         self.grid_n = grid_n
@@ -37,24 +37,26 @@ class CustomMazeDataset(Dataset):
         self.pad_token = self.tokenizer.padding_token_index
 
         self.vocab_map = self.tokenizer.tokenizer_map.get
-        pass
+        self.no_loops = no_loops
 
     def __getitem__(self, index):
-        # Replace this with your code to generate a sample given an index
+
         # right now everything is random. I don't know how to create the same maze twice
 
-        start_pos = np.random.randint(self.grid_n,size=2)
+        start_pos = np.random.randint(self.grid_n, size=2)
 
-        maze = LatticeMazeGenerators.gen_dfs_percolation(grid_shape=np.array([self.grid_n, self.grid_n]),p=0.1)
+        if self.no_loops:
+            maze = LatticeMazeGenerators.gen_dfs_percolation(grid_shape=np.array([self.grid_n, self.grid_n]), p=0.)
+        else:
+            maze = LatticeMazeGenerators.gen_dfs_percolation(grid_shape=np.array([self.grid_n, self.grid_n]), p=0.1)
 
-        goal_pos = np.random.choice([0,self.grid_n-1],2) # randomly choose goal
-
+        # randomly choose goal
+        goal_pos = np.random.choice([0, self.grid_n-1], 2)
 
         tgt_maze: TargetedLatticeMaze = TargetedLatticeMaze.from_lattice_maze(maze, start_pos, goal_pos)
         solved_maze: SolvedMaze = SolvedMaze.from_targeted_lattice_maze(tgt_maze)
 
         tokens = solved_maze.as_tokens(self.tokenizer)
-
 
         ints = list(map(self.vocab_map, tokens))
 
@@ -63,30 +65,111 @@ class CustomMazeDataset(Dataset):
         ints_no_goal = ints[:goal_index] + ints[goal_index +3:]
 
         start_index = goal_index
+
+        if self.no_loops:
+
+            true_probs = []
+            true_preds = []
+            fork_indx = []
+
+            all_paths = []
+
+            for other_goal in [[0, 0], [0, self.grid_n-1], [self.grid_n-1, 0], [self.grid_n-1, self.grid_n-1]]:
+                other_maze: TargetedLatticeMaze = TargetedLatticeMaze.from_lattice_maze(maze, start_pos, other_goal)
+                other_solved_maze: SolvedMaze = SolvedMaze.from_targeted_lattice_maze(other_maze)
+
+                other_tokens = other_solved_maze.as_tokens(self.tokenizer)
+                other_ints = list(map(self.vocab_map, other_tokens))
+                other_goal_index = find_from_right(ints, 2)
+                assert other_goal_index == goal_index
+                other_path_ints = other_ints[other_goal_index + 4:]
+                all_paths.append(other_path_ints)
+
+            true_path = ints_no_goal[start_index+1:-1]
+
+            n_valid_paths = 4
+            valid_paths = [0,1,2,3]
+
+            for step in range(len(true_path)):
+                # path prediction stuff
+                true_pred = np.zeros(self.vocab_size)
+
+                for j in valid_paths:
+                    next_step = all_paths[j][step]
+                    true_pred[next_step] += 1/len(valid_paths)
+                true_preds.append(true_pred)
+
+                # probe related stuff
+
+                valid_paths = []
+                for i, other_path in enumerate(all_paths):
+                    if step < len(other_path) and other_path[step] == true_path[step]:
+                        if step > 0:
+                            if other_path[step-1] == true_path[step-1]:
+                                valid_paths.append(i)
+                            else:
+                                assert other_path[step] == true_path[step] == 7
+                        else:
+                            valid_paths.append(i)
+
+                if step == 0:
+                    assert len(valid_paths) == n_valid_paths
+
+                true_prob = np.array([1/len(valid_paths) if i in valid_paths else 0. for i in range(len(all_paths))])
+                true_probs.append(true_prob)
+
+                if len(valid_paths) != n_valid_paths:
+                    try:
+                        assert len(valid_paths) < n_valid_paths
+                    except:
+                        print(all_paths)
+                        print(valid_paths)
+                        print(true_path)
+                        print(true_probs)
+                        raise Exception(f"len(valid_paths) = {len(valid_paths)}, n_valid_paths = {n_valid_paths}")
+                    assert sum(true_probs[-2] > 0) - sum(true_probs[-1] > 0.) == n_valid_paths - len(valid_paths)
+                    fork_indx.append(step-1)
+                    n_valid_paths = len(valid_paths)
+
+        out = {'data': ints_no_goal, 'start_index': start_index}
+
         if self.include_maze:
-          return {'data': ints_no_goal, 'start_index': start_index, 'maze': solved_maze}
-        else:
-          return {'data': ints_no_goal, 'start_index': start_index}
+            out['maze'] = solved_maze
+
+        if self.no_loops:
+            out['true_probs'] = true_probs
+            out['fork_indx'] = fork_indx
+            out['true_preds'] = true_preds
+
+        return out
 
     def __len__(self):
-        # Replace this with your code to return the length of the dataset
+        # arbitrary since we have infinite data
         return 1000000000
 
 
 def collate_fn(batch):
-    # Get the maximum sequence length in the batch
-    max_len = max(len(item['data']) for item in batch)
+    keys_to_pad = ['data', 'true_probs', 'fork_indx', 'true_preds']
+    collated_batch = {}
+    # Iterate through each key in the batch that needs to be padded
+    for key in keys_to_pad & batch[0].keys():
+        # Get the maximum sequence length in the batch
+        max_len = max(len(item[key]) for item in batch)
 
-    # Pad the sequences and store them in a list
-    padded_data = np.array([np.pad(item['data'], (0, max_len - len(item['data'])), 'constant') for item in batch])
+        # Pad the sequences and store them in a list
+        padded_data = np.array([np.pad(item[key], [(0, max_len - len(item[key]))] + [(0, 0)] * (len(np.array(item[key]).shape)-1), 'constant', constant_values=-1) for item in batch])
 
-    # Store the end indices in a list
-    end_indices = np.array([len(item['data']) - 1 for item in batch])
+        # Store the end indices in a list
+        end_indices = np.array([len(item[key]) - 1 for item in batch])
 
-    # Initialize the collated batch with the padded data and end indices
-    collated_batch = {'data': padded_data, 'end_index': end_indices}
+        # add the padded data and end indices to the collated batch
+        collated_batch[key] = padded_data
+        collated_batch[key + '_end_index'] = end_indices
 
-    # Add any other keys from the batch elements
+    # for backwards compatibility, add extra end index of data
+    collated_batch['end_index'] = collated_batch['data_end_index']
+
+    # Add any other keys from the batch elements, which haven't been padded
     for key in batch[0]:
         if key not in collated_batch:
             collated_batch[key] = np.array([item[key] for item in batch])
